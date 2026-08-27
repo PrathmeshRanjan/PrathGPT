@@ -97,7 +97,10 @@ def get_agent(model_name: str | None = None):
     """
     Return cached LangGraph agent for selected model.
     If not created yet, create it once and reuse it.
+    Falls back to DEFAULT_MODEL if model_name is invalid or missing.
     """
+    if not model_name or model_name not in ALLOWED_MODELS:
+        model_name = DEFAULT_MODEL
 
     if model_name not in _AGENT_CACHE:
         _AGENT_CACHE[model_name] = build_agent(model_name)

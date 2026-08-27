@@ -5,6 +5,11 @@
     <title>PrathGPT</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- 
+      ========================================================================
+      STYLES: Dark-themed ChatGPT-style UI with responsive sidebar & input bar
+      ========================================================================
+    -->
     <style>
         * {
             box-sizing: border-box;
@@ -20,6 +25,7 @@
             overflow: hidden;
         }
 
+        /* --- Left Sidebar (Chat History & New Chat) --- */
         .sidebar {
             width: 270px;
             background: #171717;
@@ -86,6 +92,7 @@
             color: #ffffff;
         }
 
+        /* --- Main Chat Stage --- */
         .main {
             flex: 1;
             display: flex;
@@ -117,6 +124,7 @@
             padding: 30px 20px 150px;
         }
 
+        /* --- Welcome Screen & Prompt Starter Cards --- */
         .welcome {
             max-width: 760px;
             margin: 110px auto 0;
@@ -155,6 +163,7 @@
             background: #2a2a2a;
         }
 
+        /* --- Message Bubbles & Avatars --- */
         .message {
             max-width: 820px;
             margin: 0 auto 28px;
@@ -217,6 +226,7 @@
             overflow-wrap: anywhere;
         }
 
+        /* --- Tool Execution Progress Indicator --- */
         .tool-progress {
             max-width: 820px;
             margin: 0 auto 14px;
@@ -260,6 +270,7 @@
             }
         }
 
+        /* --- Floating Bottom Input Area --- */
         .input-area {
             position: fixed;
             bottom: 0;
@@ -416,6 +427,7 @@
             text-align: center;
         }
 
+        /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
@@ -452,6 +464,9 @@
 
 <body>
 
+<!-- ========================================================================
+     SIDEBAR: Brand, new chat trigger, and dynamic conversation list
+     ======================================================================== -->
 <aside class="sidebar">
     <div class="brand">PrathGPT</div>
 
@@ -461,12 +476,16 @@
     <div id="conversationList"></div>
 </aside>
 
+<!-- ========================================================================
+     MAIN STAGE: Top header, chat message stream, and floating input bar
+     ======================================================================== -->
 <main class="main">
     <div class="topbar">
         <div>Agentic AI Chatbot</div>
         <div class="status" id="status">Ready</div>
     </div>
 
+    <!-- Message list and empty-state starter cards -->
     <div class="chat-container" id="chatContainer">
         <div class="welcome" id="welcome">
             <h1>How can I help you today?</h1>
@@ -492,9 +511,11 @@
         </div>
     </div>
 
+    <!-- Bottom Input Controls: Upload, Text Input, Model Dropdown, Mic, Send -->
     <div class="input-area">
         <div class="input-wrapper">
 
+            <!-- Hidden file input triggered by attachment button -->
             <input
                 type="file"
                 id="fileInput"
@@ -516,11 +537,13 @@
             ></textarea>
 
             <select id="modelSelect" class="model-select" title="Select model">
-                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                <option value="mistralai:mistral-small-latest">mistral-small</option>
+                <option value="mistralai:mistral-medium-latest">mistral-medium</option>
+                <option value="mistralai:mistral-large-latest">mistral-large</option>
+                <option value="mistralai:ministral-8b-latest">ministral-8b</option>
+                <option value="mistralai:ministral-3b-latest">ministral-3b</option>
+                <option value="mistralai:ministral-14b-latest">ministral-14b</option>
+                <option value="mistralai:codestral-latest">codestral</option>
             </select>
 
             <button class="mic-btn" id="micBtn" onclick="toggleDictation()" title="Dictate">
@@ -536,7 +559,11 @@
     </div>
 </main>
 
+<!-- ========================================================================
+     CLIENT JAVASCRIPT: State, Voice Recognition, SSE Streaming, CRUD
+     ======================================================================== -->
 <script>
+    // DOM Element References
     const chatContainer = document.getElementById("chatContainer");
     const messageInput = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
@@ -546,6 +573,9 @@
     const noticeText = document.getElementById("noticeText");
     const micBtn = document.getElementById("micBtn");
 
+    // -----------------------------------------------------------------------
+    // 1. Session & Thread Management (localStorage)
+    // -----------------------------------------------------------------------
     let threadId = localStorage.getItem("thread_id");
 
     if (!threadId) {
@@ -553,10 +583,16 @@
         localStorage.setItem("thread_id", threadId);
     }
 
+    // Restore previously chosen model preference from localStorage (validating against current options)
     const savedModel = localStorage.getItem("selected_model");
-
-    if (savedModel && modelSelect) {
-        modelSelect.value = savedModel;
+    if (modelSelect) {
+        const isValidOption = Array.from(modelSelect.options).some(opt => opt.value === savedModel);
+        if (savedModel && isValidOption) {
+            modelSelect.value = savedModel;
+        } else {
+            modelSelect.value = "mistralai:mistral-small-latest";
+            localStorage.setItem("selected_model", modelSelect.value);
+        }
     }
 
     if (modelSelect) {
@@ -569,6 +605,9 @@
         });
     }
 
+    // -----------------------------------------------------------------------
+    // 2. Web Speech API (Voice Dictation / Speech-to-Text)
+    // -----------------------------------------------------------------------
     let recognition = null;
     let isDictating = false;
 
@@ -581,19 +620,16 @@
         }
 
         const speechRecognition = new SpeechRecognition();
-
         speechRecognition.lang = "en-US";
         speechRecognition.continuous = true;
         speechRecognition.interimResults = true;
 
         speechRecognition.onstart = () => {
             isDictating = true;
-
             if (micBtn) {
                 micBtn.classList.add("recording");
                 micBtn.textContent = "⏹️";
             }
-
             statusText.textContent = "Listening...";
         };
 
@@ -613,11 +649,9 @@
 
             if (finalTranscript) {
                 const currentText = messageInput.value.trim();
-
                 messageInput.value = currentText
                     ? currentText + " " + finalTranscript.trim()
                     : finalTranscript.trim();
-
                 autoResize(messageInput);
             }
 
@@ -628,11 +662,9 @@
 
         speechRecognition.onerror = (event) => {
             console.error("Speech recognition error:", event.error);
-
             if (event.error === "not-allowed") {
                 alert("Microphone permission denied. Please allow microphone access.");
             }
-
             stopDictation();
         };
 
@@ -699,6 +731,9 @@
         messageInput.focus();
     }
 
+    // -----------------------------------------------------------------------
+    // 3. UI Helpers & Textarea Auto-Resizing
+    // -----------------------------------------------------------------------
     function autoResize(textarea) {
         textarea.style.height = "auto";
         textarea.style.height = textarea.scrollHeight + "px";
@@ -713,6 +748,7 @@
     }
 
     function handleKeyDown(event) {
+        // Send message on Enter without Shift key (Shift+Enter allows multiline input)
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             sendMessage();
@@ -757,6 +793,9 @@
         return messageContent;
     }
 
+    // -----------------------------------------------------------------------
+    // 4. Intent Detection & Tool Visual Indicator
+    // -----------------------------------------------------------------------
     function detectLikelyTool(message) {
         const text = message.toLowerCase();
 
@@ -764,29 +803,14 @@
         const ragPattern = /document|pdf|file|uploaded|summarize|summary|according to|based on/;
         const memorySavePattern = /remember that|save this|store this|keep in memory|memorize/;
         const memoryRecallPattern = /what do you remember|recall|my memory|remember about me/;
-
         const webSearchPattern =
             /latest|current|today|now|recent|news|search web|web search|internet|online|price|version|update|2025|2026|who is|what is happening|trending|release|new model|current ceo|latest version/;
 
-        if (memorySavePattern.test(text)) {
-            return "Memory Save";
-        }
-
-        if (memoryRecallPattern.test(text)) {
-            return "Memory Recall";
-        }
-
-        if (ragPattern.test(text)) {
-            return "Document Search";
-        }
-
-        if (webSearchPattern.test(text)) {
-            return "Web Search";
-        }
-
-        if (mathPattern.test(text)) {
-            return "Calculator";
-        }
+        if (memorySavePattern.test(text)) return "Memory Save";
+        if (memoryRecallPattern.test(text)) return "Memory Recall";
+        if (ragPattern.test(text)) return "Document Search";
+        if (webSearchPattern.test(text)) return "Web Search";
+        if (mathPattern.test(text)) return "Calculator";
 
         return null;
     }
@@ -826,6 +850,9 @@
         toolProgress.text.textContent = `${toolName} completed`;
     }
 
+    // -----------------------------------------------------------------------
+    // 5. Conversation History & Sidebar Management
+    // -----------------------------------------------------------------------
     async function loadConversations() {
         try {
             const response = await fetch("/conversations");
@@ -916,6 +943,9 @@
         `;
     }
 
+    // -----------------------------------------------------------------------
+    // 6. Server-Sent Events (SSE) Stream Handling
+    // -----------------------------------------------------------------------
     function parseSSEPart(part) {
         const lines = part
             .split(/\r?\n/)
@@ -944,15 +974,15 @@
 
     async function sendMessage() {
         const message = messageInput.value.trim();
-
         if (!message) return;
 
         if (isDictating) {
             stopDictation();
         }
 
-        const selectedModel = modelSelect ? modelSelect.value : "gemini-2.5-flash";
+        const selectedModel = modelSelect ? modelSelect.value : "mistralai:mistral-small-latest";
 
+        // Display user message in chat
         addMessage("user", message);
 
         messageInput.value = "";
@@ -961,6 +991,7 @@
         sendBtn.disabled = true;
         statusText.textContent = `Thinking with ${selectedModel}...`;
 
+        // Pre-check for likely tool to show early progress spinner
         const likelyTool = detectLikelyTool(message);
         let toolProgress = null;
 
@@ -969,8 +1000,8 @@
             statusText.textContent = `Using ${likelyTool}...`;
         }
 
+        // Create empty assistant message bubble to receive streamed tokens
         const botElement = addMessage("assistant", "");
-
         let firstTokenReceived = false;
 
         function handleStreamData(data) {
@@ -1025,14 +1056,12 @@
 
             if (!response.ok) {
                 let errorText = "Request failed.";
-
                 try {
                     const errorData = await response.json();
                     errorText = errorData.detail || errorData.message || errorText;
                 } catch (error) {
                     console.error("Could not parse error response:", error);
                 }
-
                 botElement.textContent = errorText;
                 return;
             }
@@ -1042,17 +1071,14 @@
                 return;
             }
 
+            // Read the binary stream using ReadableStream reader & TextDecoder
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
-
             let buffer = "";
 
             while (true) {
                 const { value, done } = await reader.read();
-
-                if (done) {
-                    break;
-                }
+                if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
 
@@ -1065,14 +1091,8 @@
                 }
             }
 
-            /*
-                Important fix:
-                Sometimes the final streamed response does not end with "\n\n".
-                In that case, the final data remains inside buffer.
-                This part makes sure the leftover buffer is also displayed.
-            */
+            // Ensure any residual SSE chunks left in buffer are processed
             buffer += decoder.decode();
-
             if (buffer.trim()) {
                 const data = parseSSEPart(buffer);
                 handleStreamData(data);
@@ -1096,15 +1116,14 @@
         }
     }
 
+    // -----------------------------------------------------------------------
+    // 7. File Upload (Multipart Form Data to /upload)
+    // -----------------------------------------------------------------------
     async function uploadFile() {
         const fileInput = document.getElementById("fileInput");
-
-        if (!fileInput.files.length) {
-            return;
-        }
+        if (!fileInput.files.length) return;
 
         const file = fileInput.files[0];
-
         addMessage("user", `📎 Uploaded document: ${file.name}`);
 
         const toolProgress = addToolProgress("Document Ingestion");
@@ -1121,7 +1140,6 @@
             });
 
             const data = await response.json();
-
             completeToolProgress(toolProgress, "Document Ingestion");
 
             if (data.success) {
@@ -1129,7 +1147,6 @@
                     "assistant",
                     data.message + "\n\nYou can now ask questions about this document."
                 );
-
                 await loadConversations();
             } else {
                 addMessage("assistant", "Upload failed: " + data.message);
@@ -1144,6 +1161,9 @@
         fileInput.value = "";
     }
 
+    // -----------------------------------------------------------------------
+    // 8. New Chat Initialization
+    // -----------------------------------------------------------------------
     async function newChat() {
         threadId = crypto.randomUUID();
         localStorage.setItem("thread_id", threadId);
@@ -1157,8 +1177,8 @@
         messageInput.focus();
     }
 
+    // Initial boot
     loadConversations();
-
     if (threadId) {
         loadConversation(threadId);
     }
