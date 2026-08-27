@@ -1,15 +1,9 @@
 from langgraph.graph import START, StateGraph, MessagesState
-from langgraph.graph.message import add_messages
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import SystemMessage
 from dotenv import load_dotenv
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_core.tools import tool
-from langchain_tavily import TavilySearch
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import sqlite3
 from pathlib import Path
 from tools import tools
