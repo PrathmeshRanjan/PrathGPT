@@ -145,6 +145,7 @@ PrathGPT/
 ├── rag.py                  # Document parsing, chunking, and ChromaDB vector search
 ├── tools.py                # Tools (Tavily search, weather, stock, calculator, memory)
 ├── requirements.txt        # Python dependencies
+├── .env.example            # Environment configuration template
 ├── Dockerfile              # Docker image configuration
 ├── .dockerignore           # Docker build exclusions
 ├── .gitignore              # Git ignored files (databases, secrets, uploads)
