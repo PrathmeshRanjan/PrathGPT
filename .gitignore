@@ -6,3 +6,6 @@ chroma_db/
 uploads/
 *.sqlite
 *.db
+*accessKeys*.csv
+prath_accessKeys.csv
+*.csv

@@ -3,6 +3,7 @@ uvicorn
 jinja2
 python-multipart
 python-dotenv
+requests
 
 langchain
 langchain-google-genai

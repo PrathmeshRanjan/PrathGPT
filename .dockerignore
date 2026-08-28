@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Environment variables & credentials
+.env
+*accessKeys*.csv
+*.csv
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Local databases & uploads
+data/
+uploads/
+chroma_db/
+*.sqlite
+*.db
+
+# Documentation
+DEPLOYMENT.md
+README.md
