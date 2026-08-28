@@ -5,6 +5,9 @@
     <title>PrathGPT</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- Markdown Parser (marked.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
     <!-- 
       ========================================================================
       STYLES: Dark-themed ChatGPT-style UI with responsive sidebar & input bar
@@ -191,12 +194,71 @@
             border-radius: 18px 18px 4px 18px;
             padding: 12px 16px;
             max-width: 70%;
+            white-space: pre-wrap;
         }
 
         .message.assistant .message-content {
             background: transparent;
             padding: 0;
-            max-width: 75%;
+            max-width: 78%;
+            white-space: normal;
+            line-height: 1.65;
+        }
+
+        .message.assistant .message-content p {
+            margin: 0 0 10px 0;
+        }
+
+        .message.assistant .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message.assistant .message-content strong,
+        .message.assistant .message-content b {
+            color: #ffffff;
+            font-weight: 650;
+        }
+
+        .message.assistant .message-content em,
+        .message.assistant .message-content i {
+            color: #ddd;
+            font-style: italic;
+        }
+
+        .message.assistant .message-content ul,
+        .message.assistant .message-content ol {
+            margin: 6px 0 12px 22px;
+            padding-left: 0;
+        }
+
+        .message.assistant .message-content li {
+            margin-bottom: 4px;
+        }
+
+        .message.assistant .message-content code {
+            background: #2b2b2b;
+            color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.88em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            border: 1px solid #3d3d3d;
+        }
+
+        .message.assistant .message-content pre {
+            background: #181818;
+            border: 1px solid #383838;
+            border-radius: 10px;
+            padding: 14px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .message.assistant .message-content pre code {
+            background: transparent;
+            padding: 0;
+            border: none;
+            font-size: 0.9em;
         }
 
         .avatar {
@@ -222,7 +284,6 @@
         .message-content {
             color: #ececec;
             font-size: 16px;
-            white-space: pre-wrap;
             overflow-wrap: anywhere;
         }
 
@@ -278,6 +339,8 @@
             right: 0;
             background: linear-gradient(to top, #212121 82%, transparent);
             padding: 24px 20px;
+            pointer-events: none; /* Allows clicks to pass through transparent padding */
+            z-index: 100;
         }
 
         .input-wrapper {
@@ -290,6 +353,7 @@
             align-items: flex-end;
             padding: 12px;
             box-shadow: 0 0 18px rgba(0, 0, 0, 0.25);
+            pointer-events: auto; /* Re-enable pointer events for input controls */
         }
 
         .attach-btn {
@@ -306,6 +370,7 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            user-select: none;
         }
 
         .attach-btn:hover {
@@ -369,6 +434,7 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            user-select: none;
         }
 
         .mic-btn:hover {
@@ -407,6 +473,7 @@
             font-size: 18px;
             margin-left: 8px;
             flex-shrink: 0;
+            user-select: none;
         }
 
         .send-btn:hover {
@@ -425,6 +492,7 @@
             max-width: 820px;
             margin: 8px auto 0;
             text-align: center;
+            pointer-events: auto;
         }
 
         /* --- Mobile Responsiveness --- */
@@ -470,7 +538,7 @@
 <aside class="sidebar">
     <div class="brand">PrathGPT</div>
 
-    <button class="new-chat" onclick="newChat()">+ New chat</button>
+    <button class="new-chat" type="button" id="newChatBtn" onclick="newChat()">+ New chat</button>
 
     <div class="history-title">Recent Chats</div>
     <div id="conversationList"></div>
@@ -524,7 +592,7 @@
                 onchange="uploadFile()"
             >
 
-            <button class="attach-btn" onclick="openFilePicker()" title="Upload document">
+            <button class="attach-btn" type="button" id="attachBtn" onclick="openFilePicker()" title="Upload document">
                 📎
             </button>
 
@@ -546,11 +614,11 @@
                 <option value="mistralai:codestral-latest">codestral</option>
             </select>
 
-            <button class="mic-btn" id="micBtn" onclick="toggleDictation()" title="Dictate">
+            <button class="mic-btn" type="button" id="micBtn" onclick="toggleDictation()" title="Dictate">
                 🎙️
             </button>
 
-            <button class="send-btn" id="sendBtn" onclick="sendMessage()">➜</button>
+            <button class="send-btn" type="button" id="sendBtn" onclick="sendMessage()">➜</button>
         </div>
 
         <div class="notice" id="noticeText">
@@ -563,10 +631,75 @@
      CLIENT JAVASCRIPT: State, Voice Recognition, SSE Streaming, CRUD
      ======================================================================== -->
 <script>
+    // Safe storage helpers
+    function safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function safeSetItem(key, val) {
+        try {
+            localStorage.setItem(key, val);
+        } catch (e) {}
+    }
+
+    // Cross-browser UUID generator (works on HTTP, HTTPS, localhost, IP addresses)
+    function generateUUID() {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+            try {
+                return crypto.randomUUID();
+            } catch (e) {}
+        }
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === "x" ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // Configure marked options for Markdown rendering
+    if (typeof marked !== "undefined" && marked.setOptions) {
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function renderMarkdown(text) {
+        if (!text) return "";
+        if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+            try {
+                return marked.parse(text);
+            } catch (e) {
+                console.error("Marked parsing error:", e);
+            }
+        }
+        // Fallback simple markdown parser if library is unavailable
+        return escapeHtml(text)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+    }
+
     // DOM Element References
     const chatContainer = document.getElementById("chatContainer");
     const messageInput = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
+    const newChatBtn = document.getElementById("newChatBtn");
+    const attachBtn = document.getElementById("attachBtn");
     const statusText = document.getElementById("status");
     const conversationList = document.getElementById("conversationList");
     const modelSelect = document.getElementById("modelSelect");
@@ -574,30 +707,30 @@
     const micBtn = document.getElementById("micBtn");
 
     // -----------------------------------------------------------------------
-    // 1. Session & Thread Management (localStorage)
+    // 1. Session & Thread Management
     // -----------------------------------------------------------------------
-    let threadId = localStorage.getItem("thread_id");
+    let threadId = safeGetItem("thread_id");
 
     if (!threadId) {
-        threadId = crypto.randomUUID();
-        localStorage.setItem("thread_id", threadId);
+        threadId = generateUUID();
+        safeSetItem("thread_id", threadId);
     }
 
-    // Restore previously chosen model preference from localStorage (validating against current options)
-    const savedModel = localStorage.getItem("selected_model");
+    // Restore previously chosen model preference
+    const savedModel = safeGetItem("selected_model");
     if (modelSelect) {
         const isValidOption = Array.from(modelSelect.options).some(opt => opt.value === savedModel);
         if (savedModel && isValidOption) {
             modelSelect.value = savedModel;
         } else {
             modelSelect.value = "mistralai:mistral-small-latest";
-            localStorage.setItem("selected_model", modelSelect.value);
+            safeSetItem("selected_model", modelSelect.value);
         }
     }
 
     if (modelSelect) {
         modelSelect.addEventListener("change", () => {
-            localStorage.setItem("selected_model", modelSelect.value);
+            safeSetItem("selected_model", modelSelect.value);
 
             if (noticeText) {
                 noticeText.textContent = `Selected model: ${modelSelect.value}`;
@@ -606,7 +739,7 @@
     }
 
     // -----------------------------------------------------------------------
-    // 2. Web Speech API (Voice Dictation / Speech-to-Text)
+    // 2. Web Speech API (Voice Dictation)
     // -----------------------------------------------------------------------
     let recognition = null;
     let isDictating = false;
@@ -630,7 +763,7 @@
                 micBtn.classList.add("recording");
                 micBtn.textContent = "⏹️";
             }
-            statusText.textContent = "Listening...";
+            if (statusText) statusText.textContent = "Listening...";
         };
 
         speechRecognition.onresult = (event) => {
@@ -647,7 +780,7 @@
                 }
             }
 
-            if (finalTranscript) {
+            if (finalTranscript && messageInput) {
                 const currentText = messageInput.value.trim();
                 messageInput.value = currentText
                     ? currentText + " " + finalTranscript.trim()
@@ -700,7 +833,7 @@
 
     function startDictation() {
         try {
-            recognition.start();
+            if (recognition) recognition.start();
         } catch (error) {
             console.error("Could not start dictation:", error);
         }
@@ -722,19 +855,20 @@
             micBtn.textContent = "🎙️";
         }
 
-        statusText.textContent = "Ready";
+        if (statusText) statusText.textContent = "Ready";
 
         if (noticeText) {
             noticeText.textContent = "PrathGPT can make mistakes. Check important info.";
         }
 
-        messageInput.focus();
+        if (messageInput) messageInput.focus();
     }
 
     // -----------------------------------------------------------------------
     // 3. UI Helpers & Textarea Auto-Resizing
     // -----------------------------------------------------------------------
     function autoResize(textarea) {
+        if (!textarea) return;
         textarea.style.height = "auto";
         textarea.style.height = textarea.scrollHeight + "px";
     }
@@ -748,7 +882,6 @@
     }
 
     function handleKeyDown(event) {
-        // Send message on Enter without Shift key (Shift+Enter allows multiline input)
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             sendMessage();
@@ -756,13 +889,15 @@
     }
 
     function usePrompt(text) {
+        if (!messageInput) return;
         messageInput.value = text;
         autoResize(messageInput);
         messageInput.focus();
     }
 
     function openFilePicker() {
-        document.getElementById("fileInput").click();
+        const fileInput = document.getElementById("fileInput");
+        if (fileInput) fileInput.click();
     }
 
     function addMessage(role, content = "") {
@@ -782,13 +917,20 @@
 
         const messageContent = document.createElement("div");
         messageContent.className = "message-content";
-        messageContent.textContent = content;
+
+        if (role === "assistant") {
+            messageContent.innerHTML = content ? renderMarkdown(content) : "";
+        } else {
+            messageContent.textContent = content;
+        }
 
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(messageContent);
 
-        chatContainer.appendChild(messageDiv);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        if (chatContainer) {
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
 
         return messageContent;
     }
@@ -832,8 +974,10 @@
         box.appendChild(text);
         wrapper.appendChild(box);
 
-        chatContainer.appendChild(wrapper);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        if (chatContainer) {
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
 
         return {
             wrapper,
@@ -854,6 +998,8 @@
     // 5. Conversation History & Sidebar Management
     // -----------------------------------------------------------------------
     async function loadConversations() {
+        if (!conversationList) return;
+
         try {
             const response = await fetch("/conversations");
             const data = await response.json();
@@ -888,13 +1034,13 @@
 
     async function loadConversation(selectedThreadId) {
         threadId = selectedThreadId;
-        localStorage.setItem("thread_id", threadId);
+        safeSetItem("thread_id", threadId);
 
         try {
             const response = await fetch(`/history/${threadId}`);
             const data = await response.json();
 
-            chatContainer.innerHTML = "";
+            if (chatContainer) chatContainer.innerHTML = "";
 
             if (!data.messages || data.messages.length === 0) {
                 renderWelcome();
@@ -917,6 +1063,7 @@
     }
 
     function renderWelcome() {
+        if (!chatContainer) return;
         chatContainer.innerHTML = `
             <div class="welcome" id="welcome">
                 <h1>How can I help you today?</h1>
@@ -973,6 +1120,7 @@
     }
 
     async function sendMessage() {
+        if (!messageInput) return;
         const message = messageInput.value.trim();
         if (!message) return;
 
@@ -988,8 +1136,8 @@
         messageInput.value = "";
         messageInput.style.height = "auto";
 
-        sendBtn.disabled = true;
-        statusText.textContent = `Thinking with ${selectedModel}...`;
+        if (sendBtn) sendBtn.disabled = true;
+        if (statusText) statusText.textContent = `Thinking with ${selectedModel}...`;
 
         // Pre-check for likely tool to show early progress spinner
         const likelyTool = detectLikelyTool(message);
@@ -997,11 +1145,12 @@
 
         if (likelyTool) {
             toolProgress = addToolProgress(likelyTool);
-            statusText.textContent = `Using ${likelyTool}...`;
+            if (statusText) statusText.textContent = `Using ${likelyTool}...`;
         }
 
         // Create empty assistant message bubble to receive streamed tokens
         const botElement = addMessage("assistant", "");
+        let botRawText = "";
         let firstTokenReceived = false;
 
         function handleStreamData(data) {
@@ -1015,11 +1164,12 @@
                         completeToolProgress(toolProgress, likelyTool);
                     }
 
-                    statusText.textContent = `Generating with ${selectedModel}...`;
+                    if (statusText) statusText.textContent = `Generating with ${selectedModel}...`;
                 }
 
-                botElement.textContent += data.token;
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                botRawText += data.token;
+                botElement.innerHTML = renderMarkdown(botRawText);
+                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
             }
 
             if (data.error) {
@@ -1027,9 +1177,10 @@
                     completeToolProgress(toolProgress, likelyTool);
                 }
 
-                botElement.textContent += "\n\nError: " + data.error;
-                statusText.textContent = "Ready";
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                botRawText += "\n\nError: " + data.error;
+                botElement.innerHTML = renderMarkdown(botRawText);
+                if (statusText) statusText.textContent = "Ready";
+                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
             }
 
             if (data.done) {
@@ -1037,7 +1188,7 @@
                     completeToolProgress(toolProgress, likelyTool);
                 }
 
-                statusText.textContent = "Ready";
+                if (statusText) statusText.textContent = "Ready";
             }
         }
 
@@ -1108,9 +1259,9 @@
             botElement.textContent = "Something went wrong: " + error.message;
 
         } finally {
-            sendBtn.disabled = false;
-            statusText.textContent = "Ready";
-            messageInput.focus();
+            if (sendBtn) sendBtn.disabled = false;
+            if (statusText) statusText.textContent = "Ready";
+            if (messageInput) messageInput.focus();
 
             await loadConversations();
         }
@@ -1121,13 +1272,13 @@
     // -----------------------------------------------------------------------
     async function uploadFile() {
         const fileInput = document.getElementById("fileInput");
-        if (!fileInput.files.length) return;
+        if (!fileInput || !fileInput.files.length) return;
 
         const file = fileInput.files[0];
         addMessage("user", `📎 Uploaded document: ${file.name}`);
 
         const toolProgress = addToolProgress("Document Ingestion");
-        statusText.textContent = "Using Document Ingestion...";
+        if (statusText) statusText.textContent = "Using Document Ingestion...";
 
         const formData = new FormData();
         formData.append("file", file);
@@ -1157,7 +1308,7 @@
             addMessage("assistant", "Upload failed: " + error.message);
         }
 
-        statusText.textContent = "Ready";
+        if (statusText) statusText.textContent = "Ready";
         fileInput.value = "";
     }
 
@@ -1165,8 +1316,8 @@
     // 8. New Chat Initialization
     // -----------------------------------------------------------------------
     async function newChat() {
-        threadId = crypto.randomUUID();
-        localStorage.setItem("thread_id", threadId);
+        threadId = generateUUID();
+        safeSetItem("thread_id", threadId);
 
         if (isDictating) {
             stopDictation();
@@ -1174,10 +1325,29 @@
 
         renderWelcome();
         await loadConversations();
-        messageInput.focus();
+        if (messageInput) messageInput.focus();
     }
 
-    // Initial boot
+    // -----------------------------------------------------------------------
+    // 9. Expose functions to window & attach explicit event listeners
+    // -----------------------------------------------------------------------
+    window.newChat = newChat;
+    window.usePrompt = usePrompt;
+    window.openFilePicker = openFilePicker;
+    window.toggleDictation = toggleDictation;
+    window.sendMessage = sendMessage;
+    window.uploadFile = uploadFile;
+    window.loadConversation = loadConversation;
+    window.autoResize = autoResize;
+    window.handleKeyDown = handleKeyDown;
+
+    // Attach listeners directly to elements
+    if (newChatBtn) newChatBtn.addEventListener("click", newChat);
+    if (sendBtn) sendBtn.addEventListener("click", sendMessage);
+    if (attachBtn) attachBtn.addEventListener("click", openFilePicker);
+    if (micBtn) micBtn.addEventListener("click", toggleDictation);
+
+    // Initial page load
     loadConversations();
     if (threadId) {
         loadConversation(threadId);
