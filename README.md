@@ -1,4 +1,4 @@
-# PrathGPT: Enterprise-Grade Agentic AI Assistant
+# PrathGPT: Agentic AI Assistant
 
 PrathGPT is an autonomous, full-stack agentic AI system engineered with Python, FastAPI, LangGraph, LangChain, Mistral AI, Google Gemini Embeddings, ChromaDB, and SQLite. The platform provides real-time token streaming, isolated Retrieval-Augmented Generation (RAG), multi-tool decision making, persistent conversational memory, voice input capabilities, and an automated continuous integration and continuous deployment (CI/CD) pipeline on Amazon Web Services (AWS).
 
